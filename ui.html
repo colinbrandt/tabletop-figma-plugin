@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Tabletop Plugin</title>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      margin: 0px;
+      background-color: #f4f4f4;
+      display: flex;
+      flex-direction: column;
+      height: 100vh; /* Revert height to fill the viewport */
+    }
+
+    button {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 10px;
+      font-size: 16px;
+      background-color: #00a8ce;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      border-bottom: 4px solid #0086a4;
+    }
+
+    button:hover:enabled {
+      background-color: #0099bc;
+    }
+
+    button:active:enabled {
+      margin-top: 4px;
+      background-color: #0086a4;
+      border-bottom: 0px solid #0086a4;
+    }
+
+    button:disabled {
+      background-color: #d3d3d3;
+      border-bottom: 4px solid #c1c1c1;
+      cursor: not-allowed;
+    }
+
+    #preview-container {
+      display: flex;
+      height: 262px;
+      padding: 8px 0px;
+      justify-content: center;
+      align-items: center;
+      flex-shrink: 0;
+      align-self: stretch;
+      background-color: #606060;
+    }
+
+    #preview {
+      text-align: center;
+      position: relative;
+      height: 246px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-left: auto;
+      margin-right: auto;
+      color: #fff;
+    }
+
+    #preview p {
+      margin: 0;
+    }
+
+    #bottom-area {
+      margin: 20px;
+      display: flex;
+      align-items: top;
+      flex-direction: column;
+    }
+
+    #selection-count {
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .divider {
+      width: 100%;
+      height: 1px;
+      background-color: #ccc;
+    }
+
+    .button-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      color: grey;
+      font-size: 12px;
+      position: absolute;
+      left: 20px;
+      right: 20px;
+      bottom: 20px;
+    }
+
+    .toggle-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0px;
+    }
+
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 34px;
+      height: 20px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: 0.2s;
+      border-radius: 34px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 12px;
+      width: 12px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: 0.2s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: #00a8ce;
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(14px);
+    }
+
+    /* Hover effect */
+    .toggle-switch:hover .slider {
+      background-color: #48c9e6;
+    }
+  </style>
+</head>
+<body>
+  <div id="preview-container">
+    <div id="preview"><p>Select a single object<br>to sneak a peek</p></div>
+  </div>
+  <div id="bottom-area">
+    <div id="selection-count">0 objects selected</div>
+    <div class="buttons">
+      <button id="toggle-flip-card" disabled>Flip</button>
+      <div class="button-row">
+        <button id="form-deck" disabled>Stack</button>
+        <button id="randomize-order" disabled>Shuffle</button>
+        <button id="expand-deck" disabled>Expand</button>
+      </div>
+      <div class="toggle-container">
+        <span>Bring selected layers to top</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-bring-to-top" checked>
+          <span class="slider round"></span>
+        </label>
+      </div>
+    </div>
+    <div class="footer">
+      <div>v2.0</div>
+      <div>by Colin Brandt</div>
+    </div>
+  </div>
+  
+
+  <script>
+    document.getElementById('randomize-order').onclick = () => {
+      parent.postMessage({ pluginMessage: { type: 'randomize-order' } }, '*');
+    };
+
+    document.getElementById('toggle-flip-card').onclick = () => {
+      parent.postMessage({ pluginMessage: { type: 'toggle-flip-card' } }, '*');
+    };
+
+    document.getElementById('form-deck').onclick = () => {
+      parent.postMessage({ pluginMessage: { type: 'form-deck' } }, '*');
+    };
+
+    document.getElementById('expand-deck').onclick = () => {
+      parent.postMessage({ pluginMessage: { type: 'expand-deck' } }, '*');
+    };
+
+    // Listen for checkbox changes and send message to code.ts
+    document.getElementById('toggle-bring-to-top').addEventListener('change', function (e) {
+      const isChecked = e.target.checked;
+      parent.postMessage({ pluginMessage: { type: 'update-bring-to-top-toggle', value: isChecked } }, '*');
+    });
+
+    window.onmessage = (event) => {
+      const message = event.data.pluginMessage;
+      const preview = document.getElementById('preview');
+      const selectionCount = document.getElementById('selection-count');
+      const flipCardButton = document.getElementById('toggle-flip-card');
+      const shuffleButton = document.getElementById('randomize-order');
+      const formDeckButton = document.getElementById('form-deck');
+      const expandDeckButton = document.getElementById('expand-deck');
+      console.log('Received message:', message);
+      if (message.type === 'loading-card') {
+        preview.innerHTML = '<p>Loading object...</p>';
+        console.log('Displayed "Loading object..." text');
+      } else if (message.type === 'preview-card') {
+        if (message.data) {
+          preview.innerHTML = message.data;
+          console.log('Displayed card preview');
+        } else {
+          preview.innerHTML = '<p>Select a single object<br>to sneak a peek</p>';
+          console.log('Displayed empty state text');
+        }
+      } else if (message.type === 'update-selection-count') {
+        const cardText = message.count === 1 ? 'Object' : 'Objects';
+        const cardSelectedText = message.count === 1 ? 'object' : 'objects';
+        selectionCount.textContent = `${message.count} ${cardSelectedText} selected`;
+        const hasMultipleCards = message.count > 1;
+        const hasAtLeastOneCard = message.count >= 1;
+        flipCardButton.textContent = `Flip`;
+        flipCardButton.disabled = !hasAtLeastOneCard;
+        shuffleButton.disabled = !hasMultipleCards;
+        formDeckButton.disabled = !hasMultipleCards;
+        expandDeckButton.disabled = !hasMultipleCards;
+      }
+    };
+
+    // Request card preview on selection change
+    parent.postMessage({ pluginMessage: { type: 'preview-card' } }, '*');
+  </script>
+</body>
+</html>

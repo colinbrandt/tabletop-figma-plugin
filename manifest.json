@@ -1,0 +1,14 @@
+{
+  "name": "Tabletop",
+  "id": "1421185600843789619",
+  "api": "1.0.0",
+  "main": "code.js",
+  "capabilities": [],
+  "enableProposedApi": false,
+  "documentAccess": "dynamic-page",
+  "editorType": ["figma"],
+  "ui": "ui.html",
+  "networkAccess": {
+    "allowedDomains": ["https://fonts.googleapis.com", "https://www.figma.com/"]
+  }
+}
