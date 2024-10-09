@@ -216,7 +216,7 @@
       const message = event.data.pluginMessage;
       const preview = document.getElementById('preview');
       const selectionCount = document.getElementById('selection-count');
-      const flipCardButton = document.getElementById('toggle-flip-card');
+      //const flipCardButton = document.getElementById('toggle-flip-card');
       const shuffleButton = document.getElementById('randomize-order');
       const formDeckButton = document.getElementById('form-deck');
       const expandDeckButton = document.getElementById('expand-deck');
@@ -238,11 +238,19 @@
         selectionCount.textContent = `${message.count} ${cardSelectedText} selected`;
         const hasMultipleCards = message.count > 1;
         const hasAtLeastOneCard = message.count >= 1;
-        flipCardButton.textContent = `Flip`;
-        flipCardButton.disabled = !hasAtLeastOneCard;
+        //flipCardButton.textContent = `Flip`;
+        //flipCardButton.disabled = !hasAtLeastOneCard;
         shuffleButton.disabled = !hasMultipleCards;
         formDeckButton.disabled = !hasMultipleCards;
         expandDeckButton.disabled = !hasMultipleCards;
+      } else if (message.type === 'enable-flip-button') {
+        document.getElementById('toggle-flip-card').disabled = false;
+        document.getElementById('toggle-flip-card').innerText = 'Flip';
+      } else if (message.type === 'enable-roll-button') {
+        document.getElementById('toggle-flip-card').disabled = false;
+        document.getElementById('toggle-flip-card').innerText = 'Roll';
+      } else if (message.type === 'disable-flip-button') {
+        document.getElementById('toggle-flip-card').disabled = true;
       }
     };
 

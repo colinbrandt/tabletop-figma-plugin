@@ -3,13 +3,26 @@ figma.showUI(__html__, { width: 300, height: 550 });
 // Assume this variable tracks the state of the toggle from the UI
 let selectedObjectsOnTop = true;
 
+// Handle notifications so that new ones overwrite old ones, avoiding long notification queues
+let notification: NotificationHandler | null = null;
+
+function showNotification(message: string) {
+  if (notification) {
+    notification.cancel(); // Clear the previous notification
+  }
+  notification = figma.notify(message);
+}
+
+// Every time a selection changes, run this code
 figma.on('selectionchange', async () => {
-  const selectedNodes = figma.currentPage.selection.filter(node => node.type === 'INSTANCE') as InstanceNode[];
+  const selectedNodes = figma.currentPage.selection.filter(node => node.type === 'GROUP' || node.type === 'FRAME' || node.type === 'INSTANCE');
   figma.ui.postMessage({ type: 'update-selection-count', count: selectedNodes.length });
 
+  updateButtonStatus(); // Call the function to update the button status when selection changes
+  
   // Only bring to top if the toggle is on
   if (selectedObjectsOnTop && selectedNodes.length > 0) {
-    const selectedInstances = selectedNodes.filter(node => node.type === 'INSTANCE') as InstanceNode[];
+    const selectedInstances = selectedNodes.filter(node => node.type === 'GROUP' || node.type === 'FRAME' || node.type === 'INSTANCE');
     
     if (selectedInstances.length > 0) {
       bringToTop(selectedInstances);
@@ -41,26 +54,33 @@ figma.ui.onmessage = async (msg) => {
       if (parent) {
         const shuffledNodes = shuffleArray(selectedNodes);
         shuffledNodes.forEach(node => parent.appendChild(node));
-        figma.notify('Objects shuffled');
+        showNotification('Objects shuffled');
       } else {
-        figma.notify('Selected layers do not have a common parent.');
+        showNotification('Selected layers do not have a common parent.');
       }
     } else {
-      figma.notify('Please select some layers.');
+      showNotification('Please select some layers.');
     }
   }
 
+  // Handle the toggle flip/roll button message
   if (msg.type === 'toggle-flip-card') {
-    const selectedLayers = figma.currentPage.selection;
-  
-    if (selectedLayers.length > 0) {
-      selectedLayers.forEach(node => {
-        // Check if the selected node is a valid layer containing both 'Front' and 'Back'
-        toggleCardVisibility(node);
-      });
-      //figma.notify('Card flipped');
+    const selectedLayers = figma.currentPage.selection.filter(node => node.type === 'GROUP' || node.type === 'FRAME' || node.type === 'INSTANCE');
+    
+    let containsFace = true;
+    selectedLayers.forEach(layer => {
+      const faceLayers = (layer as FrameNode | GroupNode).findAll(n => n.name === 'Face');
+      if (faceLayers.length < 2) {
+        containsFace = false;
+      }
+    });
+
+    if (containsFace) {
+      rollFaces(selectedLayers);
+      showNotification('Dice rolled');
     } else {
-      figma.notify('Please select a layer with "Front" and "Back" child layers.');
+      selectedLayers.forEach(layer => toggleCardVisibility(layer, false));
+      showNotification('Cards flipped');
     }
   }
 
@@ -81,17 +101,17 @@ figma.ui.onmessage = async (msg) => {
             node.x = minX;
             node.y = currentY - index; // Stagger each subsequent layer by 1 px
             node.setPluginData('Flip card?', 'false');
-            toggleCardVisibility(node);
+            toggleCardVisibility(node, false);
             parent.appendChild(node);
           }
         });
 
-        figma.notify('Objects stacked and shuffled');
+        showNotification('Objects stacked and shuffled');
       } else {
-        figma.notify('Selected objects do not have the same parent');
+        showNotification('Selected objects do not have the same parent');
       }
     } else {
-      figma.notify('Please select some objects');
+      showNotification('Please select some objects');
     }
   }
 
@@ -103,7 +123,7 @@ figma.ui.onmessage = async (msg) => {
 
       selectedInstances.forEach(instance => {
         // Flip the card to show the Front
-        toggleCardVisibility(instance);
+        toggleCardVisibility(instance, false);
 
         // Position the card relative to its original position
         instance.x = currentX;
@@ -111,12 +131,61 @@ figma.ui.onmessage = async (msg) => {
         instance.y = currentY;
       });
 
-      figma.notify('Objects expanded');
+      showNotification('Objects expanded');
     } else {
-      figma.notify('Please select some objects');
+      showNotification('Please select some objects');
     }
   }
 };
+
+const updateButtonStatus = () => {
+  const selectedLayers = figma.currentPage.selection.filter(node => node.type === 'GROUP' || node.type === 'FRAME' || node.type === 'INSTANCE');
+
+  if (selectedLayers.length === 0) {
+    figma.ui.postMessage({ type: 'disable-flip-button' });
+    return;
+  }
+
+  let containsFrontBack = false;
+  let containsFace = true; // Assume true, we'll check further below
+  selectedLayers.forEach(layer => {
+    const frontLayer = (layer as FrameNode | GroupNode).findChild(n => n.name === 'Front');
+    const backLayer = (layer as FrameNode | GroupNode).findChild(n => n.name === 'Back');
+    const faceLayers = (layer as FrameNode | GroupNode).findAll(n => n.name === 'Face');
+
+    if (frontLayer && backLayer) {
+      containsFrontBack = true;
+    }
+    if (faceLayers.length < 2) {
+      containsFace = false;
+    }
+  });
+
+  // Update UI button text based on whether "Face" or "Front/Back" layers are present
+  if (containsFace) {
+    figma.ui.postMessage({ type: 'enable-roll-button' });
+  } else if (containsFrontBack) {
+    figma.ui.postMessage({ type: 'enable-flip-button' });
+  } else {
+    figma.ui.postMessage({ type: 'disable-flip-button' });
+  }
+};
+
+function rollFaces(layers: SceneNode[]) {
+  layers.forEach(layer => {
+    const faceLayers = (layer as FrameNode | GroupNode).children.filter(n => n.name.startsWith('Face'));
+    if (faceLayers.length > 0) {
+      // Randomly pick a "Face" layer to show
+      const randomIndex = Math.floor(Math.random() * faceLayers.length);
+      faceLayers.forEach((face, index) => {
+        face.visible = index === randomIndex; // Show the selected face, hide the others
+      });
+
+      // Update the preview in the plugin UI for the current layer
+      generatePreviewData(layer); // This function updates the UI preview
+    }
+  });
+}
 
 function shuffleArray(array: readonly SceneNode[]): readonly SceneNode[] {
   const arrayCopy = [...array];
@@ -127,27 +196,18 @@ function shuffleArray(array: readonly SceneNode[]): readonly SceneNode[] {
   return arrayCopy;
 }
 
-function toggleCardVisibility(node: SceneNode) {
-  // Ensure the selected node has children
-  if ('children' in node) {
-    // Find the 'Front' and 'Back' layers
-    const frontLayer = node.findOne(n => n.name === 'Front');
-    const backLayer = node.findOne(n => n.name === 'Back');
+function toggleCardVisibility(layer: SceneNode, showFront: boolean) {
+  const frontLayer = (layer as FrameNode | GroupNode).findChild(n => n.name === 'Front');
+  const backLayer = (layer as FrameNode | GroupNode).findChild(n => n.name === 'Back');
 
-    if (frontLayer && backLayer) {
-      // Check which layer is currently visible
-      if (frontLayer.visible) {
-        frontLayer.visible = false;
-        backLayer.visible = true;
-      } else {
-        frontLayer.visible = true;
-        backLayer.visible = false;
-      }
+  if (frontLayer && backLayer) {
+    if (showFront) {
+      frontLayer.visible = true;
+      backLayer.visible = false;
     } else {
-      figma.notify('Selected node must have both "Front" and "Back" layers.');
+      frontLayer.visible = false;
+      backLayer.visible = true;
     }
-  } else {
-    figma.notify('Selected node does not contain any children.');
   }
 }
 
@@ -172,9 +232,9 @@ function bringToTop(instances: SceneNode[]) {
   }
 }
 
-async function generatePreviewData(instance: InstanceNode): Promise<string> {
+async function generatePreviewData(layer: SceneNode): Promise<string> {
   try {
-    const previewLayer = instance.findOne(node => node.name === "Preview") as RectangleNode | null;
+    const previewLayer = (layer as FrameNode | GroupNode).findChild(n => n.name === 'Preview') as RectangleNode | null;
 
     if (previewLayer && previewLayer.type === "RECTANGLE") {
       // Ensure 'fills' is an array
@@ -201,9 +261,9 @@ async function generatePreviewData(instance: InstanceNode): Promise<string> {
     }
 
     // Fall back to generating SVG preview if no valid image is found
-    const clone = instance.clone();
-    const front = clone.findOne(node => node.name === "Front") as SceneNode;
-    const back = clone.findOne(node => node.name === "Back") as SceneNode;
+    const clone = layer.clone();
+    const front = (layer as FrameNode | GroupNode).findChild(n => n.name === 'Front');
+    const back = (layer as FrameNode | GroupNode).findChild(n => n.name === 'Back');
 
     if (front && back) {
       front.visible = true;
@@ -216,7 +276,7 @@ async function generatePreviewData(instance: InstanceNode): Promise<string> {
 
   } catch (error) {
     console.error("Error generating preview data:", error);
-    figma.notify("Error generating preview data");
+    showNotification("Error generating preview data");
     return '';
   }
 }
