@@ -14,62 +14,80 @@ function showNotification(message: string) {
 }
 
 // Every time a selection changes, run this code
-figma.on('selectionchange', async () => {
-  const selectedNodes = figma.currentPage.selection.filter(node => node.type === 'GROUP' || node.type === 'FRAME' || node.type === 'INSTANCE');
-  figma.ui.postMessage({ type: 'update-selection-count', count: selectedNodes.length });
+figma.on("selectionchange", async () => {
+  const selectedNodes = figma.currentPage.selection.filter(
+    (node) =>
+      node.type === "GROUP" || node.type === "FRAME" || node.type === "INSTANCE"
+  );
+  figma.ui.postMessage({
+    type: "update-selection-count",
+    count: selectedNodes.length,
+  });
 
   updateButtonStatus(); // Call the function to update the button status when selection changes
-  
+
   // Only bring to top if the toggle is on
   if (selectedObjectsOnTop && selectedNodes.length > 0) {
-    const selectedInstances = selectedNodes.filter(node => node.type === 'GROUP' || node.type === 'FRAME' || node.type === 'INSTANCE');
-    
+    const selectedInstances = selectedNodes.filter(
+      (node) =>
+        node.type === "GROUP" ||
+        node.type === "FRAME" ||
+        node.type === "INSTANCE"
+    );
+
     if (selectedInstances.length > 0) {
       bringToTop(selectedInstances);
     }
   }
 
   if (selectedNodes.length === 1) {
-    figma.ui.postMessage({ type: 'loading-card' });
+    figma.ui.postMessage({ type: "loading-card" });
     console.log('Sent "loading-card" message');
     const instance = selectedNodes[0];
     const previewData = await generatePreviewData(instance);
-    figma.ui.postMessage({ type: 'preview-card', data: previewData });
+    figma.ui.postMessage({ type: "preview-card", data: previewData });
     console.log('Sent "preview-card" message with data');
   } else {
-    figma.ui.postMessage({ type: 'preview-card', data: null });
+    figma.ui.postMessage({ type: "preview-card", data: null });
     console.log('Sent "preview-card" message with null data');
   }
 });
 
 figma.ui.onmessage = async (msg) => {
-  if (msg.type === 'update-bring-to-top-toggle') {
-    updateSelectedObjectsOnTopState(msg.value);  // Update toggle state based on UI
+  if (msg.type === "update-bring-to-top-toggle") {
+    updateSelectedObjectsOnTopState(msg.value); // Update toggle state based on UI
   }
 
-  if (msg.type === 'randomize-order') {
+  if (msg.type === "randomize-order") {
     const selectedNodes = figma.currentPage.selection;
     if (selectedNodes.length > 0) {
       const parent = selectedNodes[0].parent;
       if (parent) {
         const shuffledNodes = shuffleArray(selectedNodes);
-        shuffledNodes.forEach(node => parent.appendChild(node));
-        showNotification('Objects shuffled');
+        shuffledNodes.forEach((node) => parent.appendChild(node));
+        showNotification("Objects shuffled");
       } else {
-        showNotification('Selected layers do not have a common parent.');
+        showNotification("Selected layers do not have a common parent.");
       }
     } else {
-      showNotification('Please select some layers.');
+      showNotification("Please select some layers.");
     }
   }
 
   // Handle the toggle flip/roll button message
-  if (msg.type === 'toggle-flip-card') {
-    const selectedLayers = figma.currentPage.selection.filter(node => node.type === 'GROUP' || node.type === 'FRAME' || node.type === 'INSTANCE');
-    
+  if (msg.type === "toggle-flip-card") {
+    const selectedLayers = figma.currentPage.selection.filter(
+      (node) =>
+        node.type === "GROUP" ||
+        node.type === "FRAME" ||
+        node.type === "INSTANCE"
+    );
+
     let containsFace = true;
-    selectedLayers.forEach(layer => {
-      const faceLayers = (layer as FrameNode | GroupNode).findAll(n => n.name === 'Face');
+    selectedLayers.forEach((layer) => {
+      const faceLayers = (layer as FrameNode | GroupNode).findAll(
+        (n) => n.name === "Face"
+      );
       if (faceLayers.length < 2) {
         containsFace = false;
       }
@@ -77,53 +95,59 @@ figma.ui.onmessage = async (msg) => {
 
     if (containsFace) {
       rollFaces(selectedLayers);
-      showNotification('Dice rolled');
+      showNotification("Dice rolled");
     } else {
-      selectedLayers.forEach(layer => toggleCardVisibility(layer, false));
-      showNotification('Cards flipped');
+      selectedLayers.forEach((layer) => toggleCardVisibility(layer, "toggle"));
+      showNotification("Cards flipped");
     }
   }
 
-  if (msg.type === 'form-deck') {
-    const selectedNodes = figma.currentPage.selection.filter(node => node.type === 'INSTANCE') as InstanceNode[];
+  if (msg.type === "form-deck") {
+    const selectedNodes = figma.currentPage.selection.filter(
+      (node) => node.type === "INSTANCE"
+    ) as InstanceNode[];
     if (selectedNodes.length > 0) {
       const parent = selectedNodes[0].parent;
       if (parent) {
-        const minX = Math.min(...selectedNodes.map(node => node.x));
-        const avgY = selectedNodes.reduce((sum, node) => sum + node.y, 0) / selectedNodes.length;
+        const minX = Math.min(...selectedNodes.map((node) => node.x));
+        const avgY =
+          selectedNodes.reduce((sum, node) => sum + node.y, 0) /
+          selectedNodes.length;
 
         const shuffledNodes = shuffleArray(selectedNodes);
 
-        let currentY = Math.min(...shuffledNodes.map(node => node.y)); // Start from the lowest Y position
+        let currentY = Math.min(...shuffledNodes.map((node) => node.y)); // Start from the lowest Y position
 
         shuffledNodes.forEach((node, index) => {
-          if (node.type === 'INSTANCE') {
+          if (node.type === "INSTANCE") {
             node.x = minX;
             node.y = currentY - index; // Stagger each subsequent layer by 1 px
-            node.setPluginData('Flip card?', 'false');
-            toggleCardVisibility(node, false);
+            node.setPluginData("Flip card?", "false");
+            toggleCardVisibility(node, "back");
             parent.appendChild(node);
           }
         });
 
-        showNotification('Objects stacked and shuffled');
+        showNotification("Objects stacked and shuffled");
       } else {
-        showNotification('Selected objects do not have the same parent');
+        showNotification("Selected objects do not have the same parent");
       }
     } else {
-      showNotification('Please select some objects');
+      showNotification("Please select some objects");
     }
   }
 
-  if (msg.type === 'expand-deck') {
-    const selectedInstances = figma.currentPage.selection.filter(node => node.type === 'INSTANCE') as InstanceNode[];
+  if (msg.type === "expand-deck") {
+    const selectedInstances = figma.currentPage.selection.filter(
+      (node) => node.type === "INSTANCE"
+    ) as InstanceNode[];
     if (selectedInstances.length > 0) {
       let currentX = selectedInstances[0].x;
       let currentY = selectedInstances[0].y;
 
-      selectedInstances.forEach(instance => {
+      selectedInstances.forEach((instance) => {
         // Flip the card to show the Front
-        toggleCardVisibility(instance, false);
+        toggleCardVisibility(instance, "front");
 
         // Position the card relative to its original position
         instance.x = currentX;
@@ -131,27 +155,36 @@ figma.ui.onmessage = async (msg) => {
         instance.y = currentY;
       });
 
-      showNotification('Objects expanded');
+      showNotification("Objects expanded");
     } else {
-      showNotification('Please select some objects');
+      showNotification("Please select some objects");
     }
   }
 };
 
 const updateButtonStatus = () => {
-  const selectedLayers = figma.currentPage.selection.filter(node => node.type === 'GROUP' || node.type === 'FRAME' || node.type === 'INSTANCE');
+  const selectedLayers = figma.currentPage.selection.filter(
+    (node) =>
+      node.type === "GROUP" || node.type === "FRAME" || node.type === "INSTANCE"
+  );
 
   if (selectedLayers.length === 0) {
-    figma.ui.postMessage({ type: 'disable-flip-button' });
+    figma.ui.postMessage({ type: "disable-flip-button" });
     return;
   }
 
   let containsFrontBack = false;
   let containsFace = true; // Assume true, we'll check further below
-  selectedLayers.forEach(layer => {
-    const frontLayer = (layer as FrameNode | GroupNode).findChild(n => n.name === 'Front');
-    const backLayer = (layer as FrameNode | GroupNode).findChild(n => n.name === 'Back');
-    const faceLayers = (layer as FrameNode | GroupNode).findAll(n => n.name === 'Face');
+  selectedLayers.forEach((layer) => {
+    const frontLayer = (layer as FrameNode | GroupNode).findChild(
+      (n) => n.name === "Front"
+    );
+    const backLayer = (layer as FrameNode | GroupNode).findChild(
+      (n) => n.name === "Back"
+    );
+    const faceLayers = (layer as FrameNode | GroupNode).findAll(
+      (n) => n.name === "Face"
+    );
 
     if (frontLayer && backLayer) {
       containsFrontBack = true;
@@ -163,28 +196,39 @@ const updateButtonStatus = () => {
 
   // Update UI button text based on whether "Face" or "Front/Back" layers are present
   if (containsFace) {
-    figma.ui.postMessage({ type: 'enable-roll-button' });
+    figma.ui.postMessage({ type: "enable-roll-button" });
   } else if (containsFrontBack) {
-    figma.ui.postMessage({ type: 'enable-flip-button' });
+    figma.ui.postMessage({ type: "enable-flip-button" });
   } else {
-    figma.ui.postMessage({ type: 'disable-flip-button' });
+    figma.ui.postMessage({ type: "disable-flip-button" });
   }
 };
 
-function rollFaces(layers: SceneNode[]) {
-  layers.forEach(layer => {
-    const faceLayers = (layer as FrameNode | GroupNode).children.filter(n => n.name.startsWith('Face'));
+async function rollFaces(layers: SceneNode[]) {
+  layers.forEach((layer) => {
+    const faceLayers = (layer as FrameNode | GroupNode).children.filter((n) =>
+      n.name.startsWith("Face")
+    );
     if (faceLayers.length > 0) {
       // Randomly pick a "Face" layer to show
       const randomIndex = Math.floor(Math.random() * faceLayers.length);
       faceLayers.forEach((face, index) => {
         face.visible = index === randomIndex; // Show the selected face, hide the others
       });
-
-      // Update the preview in the plugin UI for the current layer
-      generatePreviewData(layer); // This function updates the UI preview
     }
   });
+
+  if (layers.length === 1) {
+    figma.ui.postMessage({ type: "loading-card" });
+    console.log('Sent "loading-card" message');
+    const instance = layers[0];
+    const previewData = await generatePreviewData(instance);
+    figma.ui.postMessage({ type: "preview-card", data: previewData });
+    console.log('Sent "preview-card" message with data');
+  } else {
+    figma.ui.postMessage({ type: "preview-card", data: null });
+    console.log('Sent "preview-card" message with null data');
+  }
 }
 
 function shuffleArray(array: readonly SceneNode[]): readonly SceneNode[] {
@@ -196,17 +240,29 @@ function shuffleArray(array: readonly SceneNode[]): readonly SceneNode[] {
   return arrayCopy;
 }
 
-function toggleCardVisibility(layer: SceneNode, showFront: boolean) {
-  const frontLayer = (layer as FrameNode | GroupNode).findChild(n => n.name === 'Front');
-  const backLayer = (layer as FrameNode | GroupNode).findChild(n => n.name === 'Back');
+function toggleCardVisibility(layer: SceneNode, showWhichSide: string) {
+  const frontLayer = (layer as FrameNode | GroupNode).findChild(
+    (n) => n.name === "Front"
+  );
+  const backLayer = (layer as FrameNode | GroupNode).findChild(
+    (n) => n.name === "Back"
+  );
 
   if (frontLayer && backLayer) {
-    if (showFront) {
+    if (showWhichSide === "front") {
       frontLayer.visible = true;
       backLayer.visible = false;
-    } else {
+    } else if (showWhichSide === "back") {
       frontLayer.visible = false;
       backLayer.visible = true;
+    } else if (showWhichSide === "toggle") {
+      if (frontLayer.visible === true) {
+        frontLayer.visible = false;
+        backLayer.visible = true;
+      } else {
+        frontLayer.visible = true;
+        backLayer.visible = false;
+      }
     }
   }
 }
@@ -234,7 +290,9 @@ function bringToTop(instances: SceneNode[]) {
 
 async function generatePreviewData(layer: SceneNode): Promise<string> {
   try {
-    const previewLayer = (layer as FrameNode | GroupNode).findChild(n => n.name === 'Preview') as RectangleNode | null;
+    const previewLayer = (layer as FrameNode | GroupNode).findChild(
+      (n) => n.name === "Preview"
+    ) as RectangleNode | null;
 
     if (previewLayer && previewLayer.type === "RECTANGLE") {
       // Ensure 'fills' is an array
@@ -248,10 +306,14 @@ async function generatePreviewData(layer: SceneNode): Promise<string> {
             // Ensure 'image' is not null
             if (image) {
               const imageBytes = await image.getBytesAsync();
-              const base64String = "data:image/png;base64," + figma.base64Encode(imageBytes);
+              const base64String =
+                "data:image/png;base64," + figma.base64Encode(imageBytes);
               return `<img src="${base64String}" alt="Preview" style="max-width: 100%; max-height: 100%;" />`;
             } else {
-              console.error("Image not found for imageHash:", imageFill.imageHash);
+              console.error(
+                "Image not found for imageHash:",
+                imageFill.imageHash
+              );
             }
           }
         }
@@ -262,21 +324,24 @@ async function generatePreviewData(layer: SceneNode): Promise<string> {
 
     // Fall back to generating SVG preview if no valid image is found
     const clone = layer.clone();
-    const front = (layer as FrameNode | GroupNode).findChild(n => n.name === 'Front');
-    const back = (layer as FrameNode | GroupNode).findChild(n => n.name === 'Back');
+    const front = (clone as FrameNode | GroupNode).findChild(
+      (n) => n.name === "Front"
+    );
+    const back = (clone as FrameNode | GroupNode).findChild(
+      (n) => n.name === "Back"
+    );
 
     if (front && back) {
       front.visible = true;
       back.visible = false;
     }
 
-    const svgString = await clone.exportAsync({ format: 'SVG_STRING' });
+    const svgString = await clone.exportAsync({ format: "SVG_STRING" });
     clone.remove();
     return svgString;
-
   } catch (error) {
     console.error("Error generating preview data:", error);
     showNotification("Error generating preview data");
-    return '';
+    return "";
   }
 }
